@@ -40,3 +40,11 @@ ResNet_MC for imagenet, please run:
 ```bash
 python3 main.py --data imagenet --arch resnet_mc --save save/imagenet_resnet50_mc --epochs 90 --data_root /path/to/imagenet -b 256
 ```
+
+To-do list:
+
+-[ ] Dynamic Evaluation
+
+-[ ] ImageNet training code
+
+-[ ] args name adjustment

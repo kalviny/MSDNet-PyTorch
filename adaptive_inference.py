@@ -1,147 +1,55 @@
+from __future__ import absolute_import
+from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import division
-from __future__ import absolute_import
 
-import torch
-from utils import AverageMeter, adjust_learning_rate, error
+import os
 import time
 import math
+import warnings
 
-import pdb
 
-class Trainer(object):
-    def __init__(self, model, criterion=None, optimizer=None, args=None):
-        self.model = model
-        self.criterion = criterion
-        self.optimizer = optimizer
-        self.args = args
+def DynamicEvaluate(model, test_loader, val_loader, args):
+    tester = Tester(model, args)
+    if os.path.exists(os.path.join(args.save, 'logits_greedy.pth')):
+        val_pred_greedy, val_target, test_pred_greedy, test_target = \
+            torch.load(os.path.join(args.save, 'logits_greedy.pth'))
+    else:
+        if os.path.exists(os.path.join(args.save, 'logits_single.pth')):
+            val_pred_single, val_target, test_pred_single, test_target = \
+                torch.load(os.path.join(args.save, 'logits_single.pth'))
+        else:
+            val_pred_single, val_target = tester.calc_logit(val_loader)
+            test_pred_single, test_target = tester.calc_logit(test_loader)
+            torch.save((val_pred_single, val_target, test_pred_single, test_target),
+                       os.path.join(args.save, 'logits_single.pth'))
 
-    def train(self, train_loader, epoch):
-        batch_time = AverageMeter()
-        data_time = AverageMeter()
-        losses = AverageMeter()
-        top1, top5 = [], []
-        for i in range(self.args.nBlocks):
-            top1.append(AverageMeter())
-            top5.append(AverageMeter())
+        # early_exit
+        best_ensemble_scheme = tester.find_greedy_ensemble(val_pred_single, val_target)
+        val_pred_greedy, val_res = \
+            tester.early_exit(val_pred_single, val_target, best_ensemble_scheme)
+        test_pred_greedy, test_res = \
+            tester.early_exit(test_pred_single, test_target, best_ensemble_scheme)
 
-        # switch to train mode
-        self.model.train()
+        torch.save((val_pred_greedy, val_target,
+                    test_pred_greedy, test_target),
+                   os.path.join(args.save, 'logits_greedy.pth'))
+        print(test_res)
+        torch.save((best_ensemble_scheme, test_res), 'early_exit_res.pth')
 
-        lr = adjust_learning_rate(self.optimizer, self.args.lr,
-                                  self.args.decay_rate, epoch,
-                                  self.args.epochs,
-                                  self.args)  # TODO: add custom
-        print('Epoch {:3d} lr = {:.6e}'.format(epoch, lr))
-
-        end = time.time()
-        for i, (input, target) in enumerate(train_loader):
-            # measure data loading time
-            data_time.update(time.time() - end)
-
-            target = target.cuda(async=True)
-            input_var = torch.autograd.Variable(input)
-            target_var = torch.autograd.Variable(target)
-
-            # compute output
-
-            output = self.model(input_var)
-            if not isinstance(output, list):
-                output = [output]
-            # pdb.set_trace()
-            loss = self.criterion(output[0], target_var)
-
-            for j in range(1, len(output)):
-                loss += self.criterion(output[j], target_var)
-            # measure error and record loss
-            losses.update(loss.item(), input.size(0))
-
-            for j in range(len(output)):
-                err1, err5 = error(output[j].data, target, topk=(1, 5))
-                top1[j].update(err1.item(), input.size(0))
-                top5[j].update(err5.item(), input.size(0))
-
-            # compute gradient and do SGD step
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if i % self.args.print_freq == 0:
-                print('Epoch: [{0}][{1}/{2}]\t'
-                      'Time {batch_time.avg:.3f}\t'
-                      'Data {data_time.avg:.3f}\t'
-                      'Loss {loss.val:.4f}\t'
-                      'Err@1 {top1.val:.4f}\t'
-                      'Err@5 {top5.val:.4f}'.format(
-                          epoch, i + 1, len(train_loader),
-                          batch_time=batch_time, data_time=data_time,
-                          loss=losses, top1=top1[-1], top5=top5[-1]))
-
-                print('Epoch: {:3d} Train loss {loss.avg:.4f} '
-                      'Err@1 {top1.avg:.4f}'
-                      ' Err@5 {top5.avg:.4f}'
-                      .format(epoch, loss=losses, top1=top1[-1], top5=top5[-1]))
-                print('Epoch: {:3d}, Train Loss: {loss.avg:.4f}'.format(epoch, loss=losses))
-                for j in range(self.args.nBlocks):
-                    print('Exit {} Err@1 {top1.avg:.4f}\t'
-                          'Err@5 {top5.avg:.4f}'.format(j,
-                        top1=top1[j], top5=top5[j]))
-            # break
-        return losses.avg, top1[-1].avg, top5[-1].avg, lr
-
-    def test(self, val_loader, epoch, silence=False):
-        batch_time = AverageMeter()
-        losses = AverageMeter()
-        top1, top5 = [], []
-        for i in range(self.args.nBlocks):
-            top1.append(AverageMeter())
-            top5.append(AverageMeter())
-
-        # switch to evaluate mode
-        self.model.eval()
-
-        end = time.time()
-        for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(async=True)
-            input = input.cuda()
-
-            input_var = torch.autograd.Variable(input, volatile=True)
-            target_var = torch.autograd.Variable(target, volatile=True)
-
-            # compute output
-            output = self.model(input_var)
-            if not isinstance(output, list):
-                output = [output]
-            loss = self.criterion(output[0], target_var)
-            for j in range(1, len(output)):
-                loss += self.criterion(output[j], target_var)
-
-            # measure error and record loss
-            losses.update(loss.item(), input.size(0))
-
-            for j in range(len(output)):
-                err1, err5 = error(output[j].data, target, topk=(1, 5))
-                top1[j].update(err1.item(), input.size(0))
-                top5[j].update(err5.item(), input.size(0))
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-            # break
-
-        if not silence:
-            print('Epoch: {:3d}, Val Loss: {loss.avg:.4f}'.format(epoch, loss=losses))
-            for j in range(self.args.nBlocks):
-                print('Err@1 {top1.avg:.4f}\t'
-                      'Err@5 {top5.avg:.4f}'.format(
-                    top1=top1[j], top5=top5[j]))
-
-        return losses.avg, top1[-1].avg, top5[-1].avg
-
+    # load flops
+    flops = torch.load(os.path.join(args.save, 'flops.pth'))
+    # dynamic evaluation
+    for p in range(1, 41):
+        _p = torch.FloatTensor(1).fill_(p * 1.0 / 20)
+        # probs = [math.exp(math.log(p) * i) for i in in range(1, tester.args.nBlocks + 1)] # geometric distribution
+        probs = torch.exp(torch.log(_p) * torch.range(1, tester.args.nBlocks))
+        probs /= probs.sum()
+        print(p, probs)
+        acc_val, _, T = tester.dynamic_eval_find_threshold(
+            val_pred_greedy, val_target, probs, flops)
+        acc_test, exp_flops = tester.dynamic_eval_with_threshold(
+            test_pred_greedy, test_target, flops, T)
 
 class Tester(object):
     def __init__(self, model, args=None):
@@ -152,17 +60,14 @@ class Tester(object):
     def calc_logit(self, val_loader, silence=False):
         self.model.eval()
         print("calculating logit")
-        logits = []
+        logits = [[] for _ in xrange(self.args.nBlocks)]
         targets = []
-        for i in range(self.args.nBlocks):
-            logits.append([])
 
         for i, (input, target) in enumerate(val_loader):
             targets.append(target)
 
             input = input.cuda()
             input_var = torch.autograd.Variable(input, volatile=True)
-
             # compute output
             output = self.model(input_var)
             if not isinstance(output, list):
@@ -171,6 +76,7 @@ class Tester(object):
             for j in range(self.args.nBlocks):
                 tmp = self.softmax(output[j])
                 logits[j].append(tmp.cpu())
+
 
         for i in range(self.args.nBlocks):
             logits[i] = torch.cat(logits[i], dim=0)

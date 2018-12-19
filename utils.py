@@ -42,34 +42,10 @@ class MyRandomSizedCrop(object):
         return crop(scale(img))
 
 
-def create_save_folder(save_path, force=False, ignore_patterns=[]):
-    if os.path.exists(save_path):
-        #print(save_path + ' already exists!', file=sys.stderr)
-        if not force:
-            ans = input('Do you want to overwrite it? [y/N]:')
-            if ans not in ('y', 'Y', 'yes', 'Yes'):
-                os.exit(1)
-        # from getpass import getuser
-        # tmp_path = '/tmp/{}-experiments/{}_{}'.format(getuser(),
-        #                                               os.path.basename(save_path),
-        #                                               time.time())
-        # print('move existing {} to {}'.format(save_path, tmp_path))
-        # shutil.copytree(save_path, tmp_path)
-        # shutil.rmtree(save_path)
-    else:
+def create_save_folder(save_path, ignore_patterns=[]):
+    if not os.path.exists(save_path):
         os.makedirs(save_path)
         print('create folder: ' + save_path)
-
-    # copy code to save folder
-    # if save_path.find('debug') < 0:
-    #     shutil.copytree('.', os.path.join(save_path, 'src'), symlinks=True,
-    #                     ignore=shutil.ignore_patterns('*.pyc', '__pycache__',
-    #                                                   '*.path.tar', '*.pth',
-    #                                                   '*.ipynb', '.*', 'data',
-    #                                                   'save', 'save_backup',
-    #                                                   save_path,
-    #                                                   *ignore_patterns))
-
 
 def adjust_learning_rate(optimizer, lr_init, decay_rate, epoch, num_epochs, args):
     """Decay Learning rate at 1/2 and 3/4 of the num_epochs"""
@@ -88,12 +64,42 @@ def adjust_learning_rate(optimizer, lr_init, decay_rate, epoch, num_epochs, args
         param_group['lr'] = lr
     return lr
 
+def save_checkpoint(state, args, is_best, filename, result):
+    print(args)
+    result_filename = os.path.join(args.save, 'scores.tsv')
+    model_dir = os.path.join(args.save, 'save_models')
+    latest_filename = os.path.join(model_dir, 'latest.txt')
+    model_filename = os.path.join(model_dir, filename)
+    best_filename = os.path.join(model_dir, 'model_best.pth.tar')
+    os.makedirs(args.save, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+    print("=> saving checkpoint '{}'".format(model_filename))
 
-def save_checkpoint(state, is_best, save_dir, filename='checkpoint.pth.tar'):
-    filename = os.path.join(save_dir, filename)
-    torch.save(state, filename)
+    torch.save(state, model_filename)
+
+    with open(result_filename, 'w') as f:
+        print('\n'.join(result), file=f)
+
+    with open(latest_filename, 'w') as fout:
+        fout.write(model_filename)
     if is_best:
-        shutil.copyfile(filename, os.path.join(save_dir, 'model_best.pth.tar'))
+        shutil.copyfile(model_filename, best_filename)
+
+    print("=> saved checkpoint '{}'".format(model_filename))
+    return
+
+def load_checkpoint(args):
+    model_dir = os.path.join(args.save, 'save_models')
+    latest_filename = os.path.join(model_dir, 'latest.txt')
+    if os.path.exists(latest_filename):
+        with open(latest_filename, 'r') as fin:
+            model_filename = fin.readlines()[0]
+    else:
+        return None
+    print("=> loading checkpoint '{}'".format(model_filename))
+    state = torch.load(model_filename)
+    print("=> loaded checkpoint '{}'".format(model_filename))
+    return state
 
 
 def get_optimizer(model, args):

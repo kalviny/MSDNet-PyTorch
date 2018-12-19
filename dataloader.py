@@ -6,7 +6,7 @@ from utils import MyRandomSizedCrop
 from imagnet_loader import ImageFolder
 
 
-def get_dataloader(data, config_of_data, splits=['train', 'val', 'test'],
+def getDataloaders(data, config_of_data, splits=['train', 'val', 'test'],
                    aug=True, use_validset=True, data_root='data', batch_size=64,
                    normalized=True, augmentation=0.08, resume=False,
                    num_workers=7, save=None, **kwargs):
@@ -40,11 +40,9 @@ def get_dataloader(data, config_of_data, splits=['train', 'val', 'test'],
         if use_validset:
             # uses last 5000 images of the original training split as the
             # validation set
-            train_set_index = None
             if 'train' in splits:
 
-                train_set = d_func(data_root, train=True, transform=train_compose,
-                                   download=True)
+                train_set = d_func(data_root, train=True, transform=train_compose)
 
                 train_set_index = torch.randperm(len(train_set))
 
@@ -68,8 +66,7 @@ def get_dataloader(data, config_of_data, splits=['train', 'val', 'test'],
                     num_workers=num_workers, pin_memory=True)
         else:
             if 'train' in splits:
-                train_set = d_func(data_root, train=True, transform=train_compose,
-                                   download=True)
+                train_set = d_func(data_root, train=True, transform=train_compose)
                 train_loader = torch.utils.data.DataLoader(
                     train_set, batch_size=batch_size, shuffle=True,
                     num_workers=num_workers, pin_memory=True)
@@ -102,6 +99,10 @@ def get_dataloader(data, config_of_data, splits=['train', 'val', 'test'],
             transforms.ToTensor(),
             normalize,
         ]))
+
+        # if resume:
+        #     train_set.set_image_list = torch.load(
+        #         os.path.join(os.path.dirname(resume), 'trainset_indices.pth')) # use the same valid split
 
         if use_validset:
             train_set_index = torch.randperm(len(train_set))

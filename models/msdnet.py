@@ -207,7 +207,7 @@ class ClassifierModule(nn.Module):
 
 
 class MSDNet(nn.Module):
-    def __init__(args):
+    def __init__(self, args):
         super(MSDNet, self).__init__()
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
@@ -303,13 +303,11 @@ class MSDNet(nn.Module):
     def forward(self, x):
         res = []
         for i in range(self.nBlocks):
-            # print("block", i)
             x = self.blocks[i](x)
             res.append(self.classifier[i](x))
         # return a tuple
         return res
 
-
-def createModel(args):
-    print('Create MSDNet{}-{:d} for {}'.format(args.nBlocks, args.step, args.data))
-    return MSDNet(args.nBlocks, args.nChannels, args)
+# def createModel(args):
+#     print('Create MSDNet{}-{:d} for {}'.format(args.nBlocks, args.step, args.data))
+#     return MSDNet(args.nBlocks, args.nChannels, args)

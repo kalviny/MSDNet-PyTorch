@@ -9,29 +9,26 @@ import config
 #                        glob.glob('models/[A-Za-z]*.py')))
 model_names = ['densenet_mc', 'resnet_mc', 'msdnet', 'msdnet_lazy']
 
-arg_parser = argparse.ArgumentParser(description='Pytorch Multi-scale Dense Networks')
+arg_parser = argparse.ArgumentParser(
+                description='Image classification PK main script')
 
 exp_group = arg_parser.add_argument_group('exp', 'experiment setting')
-exp_group.add_argument('--savedir', default='save/default-{}'.format(time.time()),
+exp_group.add_argument('--save', default='save/default-{}'.format(time.time()),
                        type=str, metavar='SAVE',
                        help='path to the experiment logging directory'
                        '(default: save/debug)')
 exp_group.add_argument('--resume', action='store_true',
-                       help='use the latest checkpoint if have any (default: none)')
-exp_group.add_argument('--eval', '--evaluate', dest='evaluate', default='',
-                       choices=['', 'train', 'val', 'test', 'flop', 'logits',
-                                'evaluate'],
-                       help='eval mode: evaluate model on train/val/test set'
-                       ' (default: \'\' i.e. training mode)')
+                    help='whether use the latest checkpoint (default: none)')
+exp_group.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                    help='evaluate model on validation set')
 exp_group.add_argument('--evaluate-from', default=None, type=str, metavar='PATH',
-                    help='path to saved checkpoint (default: none)')
-exp_group.add_argument('-f', '--force', dest='force', action='store_true',
-                       help='force to overwrite existing save path')
+                    help='path to evaluate model (default: none)')
 exp_group.add_argument('--print-freq', '-p', default=10, type=int,
                        metavar='N', help='print frequency (default: 100)')
-exp_group.add_argument('--manual-seed', default=0, type=int,
+exp_group.add_argument('--seed', default=0, type=int,
                        help='random seed')
-exp_group.add_argument('--gpu', help='gpu available')
+exp_group.add_argument('--gpu',
+                    help='GPU available.')
 
 # dataset related
 data_group = arg_parser.add_argument_group('data', 'dataset setting')
@@ -89,9 +86,9 @@ arch_group.add_argument('--base', type=int,default=4)
 arch_group.add_argument('--stepmode', type=str, choices=['even', 'lin_grow'])
 arch_group.add_argument('--step', type=int, default=1)
 arch_group.add_argument('--growthRate', type=int, default=6)
-arch_group.add_argument('--grFactor', default='1-2-4', type=str)
+arch_group.add_argument('--grFactor', default='1-2-4-4', type=str)
 arch_group.add_argument('--prune', default='max', choices=['min', 'max'])
-arch_group.add_argument('--bnFactor', default='1-2-4')
+arch_group.add_argument('--bnFactor', default='1-2-4-4')
 arch_group.add_argument('--bottleneck', default=True, type=bool)
 
 
@@ -116,9 +113,9 @@ optim_group.add_argument('--optimizer', default='sgd',
 optim_group.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                          metavar='LR',
                          help='initial learning rate (default: 0.1)')
-optim_group.add_argument('--lr-type', default='cosine', type=str, metavar='T',
-                    help='learning rate strategy (default: cosine)',
-                    choices=['cosine', 'multistep'])
+optim_group.add_argument('--lr-type', default='multistep', type=str, metavar='T',
+                        help='learning rate strategy (default: multistep)',
+                        choices=['cosine', 'multistep'])
 optim_group.add_argument('--decay_rate', default=0.1, type=float, metavar='N',
                          help='decay rate of learning rate (default: 0.1)')
 optim_group.add_argument('--momentum', default=0.9, type=float, metavar='M',
