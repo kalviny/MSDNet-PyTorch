@@ -43,8 +43,8 @@ python3 main.py --data imagenet --arch resnet_mc --save save/imagenet_resnet50_m
 
 To-do list:
 
--[ ] Dynamic Evaluation
+- [ ] Dynamic Evaluation
 
--[ ] ImageNet training code
+- [ ] ImageNet training code
 
--[ ] args name adjustment
+- [ ] args name adjustment
