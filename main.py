@@ -8,6 +8,32 @@ import os
 import sys
 import math
 import time
+import shutil
+
+from dataloader import get_dataloaders
+from args import arg_parser, arch_resume_names
+from opcounter import measure_model
+from adaptive_inference import dynamic_evaluate
+import models
+
+args = arg_parser.parse_args()
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+args.grFactor = list(map(int, args.grFactor.split('-')))
+args.bnFactor = list(map(int, args.bnFactor.split('-')))
+args.nScales = len(args.grFactor)
+
+if args.use_valid:
+    args.splits = ['train', 'val', 'test']
+else:
+    args.splits = ['train', 'val']
+
+if args.data == 'cifar10':
+    args.num_classes = 10
+elif args.data == 'cifar100':
+    args.num_classes = 100
+else:
+    args.num_classes = 1000
 
 import torch
 import torch.nn as nn
@@ -15,43 +41,27 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 
-import config
-from dataloader import getDataloaders
-from utils import save_checkpoint, load_checkpoint, create_save_folder
-from args import arg_parser, arch_resume_names
-from opcounter import measure_model
-import models
-from adaptive_inference import DynamicEvaluate
-
-args = arg_parser.parse_args()
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-
-args.config_of_data = config.datasets[args.data]
-args.num_classes = config.datasets[args.data]['num_classes']
-
-args.grFactor = list(map(int, args.grFactor.split('-')))
-args.bnFactor = list(map(int, args.bnFactor.split('-')))
-# args.grFactor = [int(ele) for ele in args.grFactor.split('-')]
-# args.bnFactor = [int(ele) for ele in args.bnFactor.split('-')]
-args.nScales = len(args.grFactor)
 torch.manual_seed(args.seed)
 
 def main():
-    # parse arg and start experiment
+
     global args
     best_err1, best_epoch = 100., 0
 
-    if args.data in ['cifar10', 'cifar100']:
+    if args.data.startswith('cifar'): 
         IMAGE_SIZE = 32
     else:
         IMAGE_SIZE = 224
 
-    create_save_folder(args.save)
+    if not os.path.exists(args.save):
+        os.makedirs(args.save)
+
     model = getattr(models, args.arch)(args)
     n_flops, _, _ = measure_model(model, IMAGE_SIZE, IMAGE_SIZE)
     torch.save(n_flops, os.path.join(args.save, 'flop.pth'))
     del(model)
-
+    torch.save(args, os.path.join(args.save, 'args.pth'))
+    
     model = getattr(models, args.arch)(args)
 
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
@@ -64,8 +74,8 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
     # define optimizer
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                            momentum=args.momentum,
-                            weight_decay=args.weight_decay)
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -76,51 +86,23 @@ def main():
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
 
-    if args.evaluate_from is not None:
-        args.evaluate = True
-        m = torch.load(args.evaluate_from)
-        model.load_state_dict(m)
-
     cudnn.benchmark = True
 
-    train_loader, val_loader, test_loader = getDataloaders(
-        splits=('train', 'val'), **vars(args))
+    train_loader, val_loader, test_loader = get_dataloaders(args)
+    print("*************************************")
+    print(args.use_valid, len(train_loader), len(val_loader), len(test_loader))
+    print("*************************************")
+    return 
 
+    if args.evaluate is not None:
+        m = torch.load(args.evaluate_from)
+        model.load_state_dict(m['state_dict'])
 
-    if args.evaluate:
-        DynamicEvaluate(model, test_loader, val_loader, criterion, args)
-
-    # create dataloader
-    # if args.evaluate == 'train':
-    #     train_loader, _, _ = getDataloaders(
-    #         splits=('train'), **vars(args))
-    #     trainer.test(train_loader, best_epoch)
-    #     return
-    # elif args.evaluate == 'val':
-    #     _, val_loader, _ = getDataloaders(
-    #         splits=('val'), **vars(args))
-    #     trainer.test(val_loader, best_epoch)
-    #     return
-    # elif args.evaluate == 'test':
-    #     _, _, test_loader = getDataloaders(
-    #         splits=('test'), **vars(args))
-    #     trainer.test(test_loader, best_epoch)
-    #     return
-    # elif args.evaluate == 'flop':
-    #     flops, _, _ = measure_model(model, 32, 32)
-    #     torch.save(flops, os.path.join(args.save, 'flop.pth'))
-    #     return
-    # elif args.evaluate == 'evaluate':
-    #     args.save = os.path.dirname(args.resume)
-    #     _, val_loader, test_loader = getDataloaders(
-    #         splits=('val', 'test'), **vars(args))
-    #     evaluate(model, test_loader, val_loader, args)
-    #     return
-    # else:
-    #     # check if the folder exists
-    #     create_save_folder(args.save, args.force)
-    #     train_loader, val_loader, test_loader = getDataloaders(
-    #         splits=('train', 'val'), **vars(args))
+        if args.evaluate == 'anytime':
+            validate(test_loader, model, criterion)
+        else:
+            dynamic_evaluate(model, test_loader, val_loader, args)
+        return
 
     # set up logging
     global log_print, f_log
@@ -137,9 +119,9 @@ def main():
               str(sum([p.numel() for p in model.parameters()])))
 
     f_log.flush()
-    torch.save(args, os.path.join(args.save, 'args.pth'))
+
     scores = ['epoch\tlr\ttrain_loss\tval_loss\ttrain_err1'
-              '\tval_err1\ttrain_err5\tval_err']
+              '\tval_err1\ttrain_err5\tval_err5']
 
     for epoch in range(args.start_epoch, args.epochs):
 
@@ -237,16 +219,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
                       batch_time=batch_time, data_time=data_time,
                       loss=losses, top1=top1[-1], top5=top5[-1]))
 
-            # print('Epoch: {:3d} Train loss {loss.avg:.4f} '
-            #       'Err@1 {top1.avg:.4f}'
-            #       ' Err@5 {top5.avg:.4f}'
-            #       .format(epoch, loss=losses, top1=top1[-1], top5=top5[-1]))
-            # print('Epoch: {:3d}, Train Loss: {loss.avg:.4f}'.format(epoch, loss=losses))
-            # for j in range(self.args.nBlocks):
-            #     print('Exit {} Err@1 {top1.avg:.4f}\t'
-            #           'Err@5 {top5.avg:.4f}'.format(j,
-            #         top1=top1[j], top5=top5[j]))
-        # break
     return losses.avg, top1[-1].avg, top5[-1].avg, running_lr
 
 def validate(val_loader, model, criterion):
@@ -265,8 +237,11 @@ def validate(val_loader, model, criterion):
         target = target.cuda(async=True)
         input = input.cuda()
 
-        input_var = torch.autograd.Variable(input, volatile=True)
-        target_var = torch.autograd.Variable(target, volatile=True)
+        # input_var = torch.autograd.Variable(input, volatile=True)
+        # target_var = torch.autograd.Variable(target, volatile=True)
+        with torch.no_grad():
+            input_var = torch.autograd.Variable(input)
+            target_var = torch.autograd.Variable(target)
 
         # compute output
         output = model(input_var)
@@ -289,15 +264,53 @@ def validate(val_loader, model, criterion):
         batch_time.update(time.time() - end)
         end = time.time()
         # break
-
-        if i % args.print_freq == 0:
-            for j in range(args.nBlocks):
-                print('Err@1 {top1.avg:.4f}\t'
-                      'Err@5 {top5.avg:.4f}'.format(
-                    top1=top1[j], top5=top5[j]))
-
+    for j in range(args.nBlocks):
+        print(' * Err@1 {top1.avg:.3f} Err@5 {top5.avg:.3f}'.format(top1=top1[j], top5=top5[j]))
+        """
+        print('Exit {}\t'
+              'Err@1 {:.4f}\t'
+              'Err@5 {:.4f}'.format(
+              j, top1[j].avg, top5[j].avg))
+        """
     # print(' * Err@1 {top1.avg:.3f} Err@5 {top5.avg:.3f}'.format(top1=top1[-1], top5=top5[-1]))
     return losses.avg, top1[-1].avg, top5[-1].avg
+
+def save_checkpoint(state, args, is_best, filename, result):
+    print(args)
+    result_filename = os.path.join(args.save, 'scores.tsv')
+    model_dir = os.path.join(args.save, 'save_models')
+    latest_filename = os.path.join(model_dir, 'latest.txt')
+    model_filename = os.path.join(model_dir, filename)
+    best_filename = os.path.join(model_dir, 'model_best.pth.tar')
+    os.makedirs(args.save, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+    print("=> saving checkpoint '{}'".format(model_filename))
+
+    torch.save(state, model_filename)
+
+    with open(result_filename, 'w') as f:
+        print('\n'.join(result), file=f)
+
+    with open(latest_filename, 'w') as fout:
+        fout.write(model_filename)
+    if is_best:
+        shutil.copyfile(model_filename, best_filename)
+
+    print("=> saved checkpoint '{}'".format(model_filename))
+    return
+
+def load_checkpoint(args):
+    model_dir = os.path.join(args.save, 'save_models')
+    latest_filename = os.path.join(model_dir, 'latest.txt')
+    if os.path.exists(latest_filename):
+        with open(latest_filename, 'r') as fin:
+            model_filename = fin.readlines()[0]
+    else:
+        return None
+    print("=> loading checkpoint '{}'".format(model_filename))
+    state = torch.load(model_filename)
+    print("=> loaded checkpoint '{}'".format(model_filename))
+    return state
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -329,7 +342,8 @@ def error(output, target, topk=(1,)):
     res = []
     for k in topk:
         correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(100.0 - correct_k.mul_(100.0 / batch_size))
+        # res.append(100.0 - correct_k.mul_(100.0 / batch_size))
+        res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
 def adjust_learning_rate(optimizer, epoch, args, batch=None,
@@ -339,7 +353,7 @@ def adjust_learning_rate(optimizer, epoch, args, batch=None,
         T_cur = (epoch % args.epochs) * nBatch + batch
         lr = 0.5 * args.lr * (1 + math.cos(math.pi * T_cur / T_total))
     elif method == 'multistep':
-        if args.data in ['cifar10', 'cifar10+', 'cifar100', 'cifar100+']: # add augmentation 
+        if args.data.startswith('cifar'):
             lr, decay_rate = args.lr, 0.1
             if epoch >= args.epochs * 0.75:
                 lr *= decay_rate ** 2

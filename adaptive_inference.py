@@ -8,8 +8,14 @@ import time
 import math
 import warnings
 
+import torch
 
-def DynamicEvaluate(model, test_loader, val_loader, args):
+
+def dynamic_evaluate(model, test_loader, val_loader, args):
+    print('--------------------------------')
+    print(len(test_loader), len(val_loader))
+    print('--------------------------------')
+
     tester = Tester(model, args)
     if os.path.exists(os.path.join(args.save, 'logits_greedy.pth')):
         val_pred_greedy, val_target, test_pred_greedy, test_target = \
@@ -34,22 +40,26 @@ def DynamicEvaluate(model, test_loader, val_loader, args):
         torch.save((val_pred_greedy, val_target,
                     test_pred_greedy, test_target),
                    os.path.join(args.save, 'logits_greedy.pth'))
-        print(test_res)
         torch.save((best_ensemble_scheme, test_res), 'early_exit_res.pth')
 
     # load flops
-    flops = torch.load(os.path.join(args.save, 'flops.pth'))
+    flops = torch.load(os.path.join(args.save, 'flop.pth'))
+    print(flops)
+    
     # dynamic evaluation
-    for p in range(1, 41):
-        _p = torch.FloatTensor(1).fill_(p * 1.0 / 20)
-        # probs = [math.exp(math.log(p) * i) for i in in range(1, tester.args.nBlocks + 1)] # geometric distribution
-        probs = torch.exp(torch.log(_p) * torch.range(1, tester.args.nBlocks))
-        probs /= probs.sum()
-        print(p, probs)
-        acc_val, _, T = tester.dynamic_eval_find_threshold(
-            val_pred_greedy, val_target, probs, flops)
-        acc_test, exp_flops = tester.dynamic_eval_with_threshold(
-            test_pred_greedy, test_target, flops, T)
+    with open(os.path.join(args.save, 'dynamic.txt'), 'w') as fout:
+        for p in range(1, 41):
+            print("*********************")
+            _p = torch.FloatTensor(1).fill_(p * 1.0 / 20)
+            # probs = [math.exp(math.log(p) * i) for i in in range(1, tester.args.nBlocks + 1)] # geometric distribution
+            probs = torch.exp(torch.log(_p) * torch.range(1, args.nBlocks))
+            probs /= probs.sum()
+            acc_val, _, T = tester.dynamic_eval_find_threshold(
+                val_pred_greedy, val_target, probs, flops)
+            acc_test, exp_flops = tester.dynamic_eval_with_threshold(
+                test_pred_greedy, test_target, flops, T)
+            print('valid acc: {:.3f}, test acc: {:.3f}, test flops: {:.2f}M'.format(acc_val, acc_test, exp_flops / 1e6))
+            fout.write('{}\t{}\n'.format(acc_test, exp_flops.item()))
 
 class Tester(object):
     def __init__(self, model, args=None):
@@ -60,23 +70,28 @@ class Tester(object):
     def calc_logit(self, val_loader, silence=False):
         self.model.eval()
         print("calculating logit")
-        logits = [[] for _ in xrange(self.args.nBlocks)]
+        # logits = [[] for _ in range(self.args.nBlocks)]
+        logits = []
+        for _ in range(self.args.nBlocks): logits.append([])
         targets = []
 
         for i, (input, target) in enumerate(val_loader):
+
             targets.append(target)
 
             input = input.cuda()
-            input_var = torch.autograd.Variable(input, volatile=True)
+            with torch.no_grad():
+                input_var = torch.autograd.Variable(input)
             # compute output
             output = self.model(input_var)
             if not isinstance(output, list):
                 output = [output]
 
-            for j in range(self.args.nBlocks):
-                tmp = self.softmax(output[j])
-                logits[j].append(tmp.cpu())
 
+            for j in range(self.args.nBlocks):
+                _t = self.softmax(output[j])
+                # print(_t.cpu().data)
+                logits[j].append(self.softmax(output[j]).cpu().data)
 
         for i in range(self.args.nBlocks):
             logits[i] = torch.cat(logits[i], dim=0)
@@ -98,12 +113,15 @@ class Tester(object):
             # print(1, num_block, best_err[0])
             greedy_scheme.append(0)
 
+            best_err = best_err.item()
+
             for start_block_num in range(num_block - 1):
                 accum_pred -= logits[start_block_num].data
                 tmp_err, _ = error(accum_pred / (num_block + 1), targets, topk=(1, 5))
+                tmp_err = tmp_err.item()
                 # print(start_block_num + 1, num_block, tmp_err[0])
-                if tmp_err[0] < best_err[0]:
-                    best_err[0] = tmp_err[0]
+                if tmp_err < best_err:
+                    best_err = tmp_err
                     greedy_scheme[-1] = start_block_num + 1
 
         print("greedy scheme", greedy_scheme)
@@ -125,7 +143,7 @@ class Tester(object):
             best_err, _ = error(accum_pred, targets, topk=(1, 5))
             # print(num_block, best_err[0])
 
-            err_greedy.append(best_err[0])
+            err_greedy.append(best_err.item())
             logits_greedy.append(accum_pred.view(1, accum_pred.size(0), accum_pred.size(1)))
 
         logits_greedy = torch.cat(logits_greedy, dim=0)
@@ -152,7 +170,7 @@ class Tester(object):
                         T[k] = max_preds[k][ori_idx]
                         break
 
-            print("classifier #",k + 1, "output # samples", out_n, "thresholds: ", T[k])
+            # print("classifier #",k + 1, "output # samples", out_n, "thresholds: ", T[k])
             filtered.add_(max_preds[k].ge(T[k]).type_as(filtered))
 
         T[m - 1] = -1e8  # accept all the samples at last exit
@@ -181,8 +199,7 @@ class Tester(object):
                 except ZeroDivisionError:
                     pass
 
-        print("acc_all", acc_all / n)
-        return acc / n, expected_flops, T
+        return acc * 1.0 / n, expected_flops, T
 
     def dynamic_eval_with_threshold(self, logits, targets, flops, T, silence=True):
         m, n, _ = logits.shape
@@ -212,5 +229,19 @@ class Tester(object):
                 except ZeroDivisionError:
                     pass
 
-        print("acc_all", acc_all / n)
-        return acc / n, expected_flops
+        return acc * 1.0 / n, expected_flops
+
+def error(output, target, topk=(1,)):
+    """Computes the error@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(100.0 - correct_k.mul_(100.0 / batch_size))
+    return res

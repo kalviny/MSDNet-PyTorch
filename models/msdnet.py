@@ -9,7 +9,7 @@ class ConvBasic(nn.Module):
         super(ConvBasic, self).__init__()
         self.net = nn.Sequential(
             nn.Conv2d(nIn, nOut, kernel_size=kernel, stride=stride,
-                      padding=padding),
+                      padding=padding, bias=False),
             nn.BatchNorm2d(nOut),
             nn.ReLU(True)
         )
@@ -35,16 +35,16 @@ class ConvBN(nn.Module):
         if bottleneck is True:
             nInner = min(nInner, bnWidth * nOut)
             layer.append(nn.Conv2d(
-                nIn, nInner, kernel_size=1, stride=1, padding=0))
+                nIn, nInner, kernel_size=1, stride=1, padding=0, bias=False))
             layer.append(nn.BatchNorm2d(nInner))
             layer.append(nn.ReLU(True))
 
         if type == 'normal':
             layer.append(nn.Conv2d(nInner, nOut, kernel_size=3,
-                                   stride=1, padding=1))
+                                   stride=1, padding=1, bias=False))
         elif type == 'down':
             layer.append(nn.Conv2d(nInner, nOut, kernel_size=3,
-                                   stride=2, padding=1))
+                                   stride=2, padding=1, bias=False))
         else:
             raise ValueError
 
@@ -241,6 +241,31 @@ class MSDNet(nn.Module):
                     self._build_classifier_cifar(nIn * args.grFactor[-1], 10))
             else:
                 raise NotImplementedError
+                
+        # adding initialization functions
+        for m in self.blocks:
+            if hasattr(m, '__iter__'):
+                for _m in m:
+                    self._init_weights(_m)
+            else:
+                self._init_weights(m)
+
+        for m in self.classifier:
+            if hasattr(m, '__iter__'):
+                for _m in m:
+                    self._init_weights(_m)
+            else:
+                self._init_weights(m)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Conv2d):
+            n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            m.weight.data.normal_(0, math.sqrt(2. / n))
+        elif isinstance(m, nn.BatchNorm2d):
+            m.weight.data.fill_(1)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.Linear):
+            m.bias.data.zero_()
 
     def _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
         layers = [MSDNFirstLayer(3, nIn, args)] \
