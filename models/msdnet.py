@@ -68,12 +68,9 @@ class ConvDownNormal(nn.Module):
                                    bottleneck, bnWidth2)
 
     def forward(self, x):
-        # print(self.conv_down, self.conv_normal, '========')
-        # pdb.set_trace()
         res = [x[1],
                self.conv_down(x[0]),
                self.conv_normal(x[1])]
-        # print(res[0].size(), res[1].size(), res[2].size())
         return torch.cat(res, dim=1)
 
 
@@ -90,7 +87,6 @@ class ConvNormal(nn.Module):
                self.conv_normal(x[0])]
 
         return torch.cat(res, dim=1)
-
 
 class MSDNFirstLayer(nn.Module):
     def __init__(self, nIn, nOut, args):
@@ -121,7 +117,6 @@ class MSDNFirstLayer(nn.Module):
             res.append(x)
 
         return res
-
 
 class MSDNLayer(nn.Module):
     def __init__(self, nIn, nOut, args, inScales=None, outScales=None):
@@ -205,7 +200,6 @@ class ClassifierModule(nn.Module):
         res = res.view(res.size(0), -1)
         return self.linear(res)
 
-
 class MSDNet(nn.Module):
     def __init__(self, args):
         super(MSDNet, self).__init__()
@@ -214,7 +208,7 @@ class MSDNet(nn.Module):
         self.nBlocks = args.nBlocks
         self.steps = [args.base]
         self.args = args
-        # todo: how many block?
+        
         n_layers_all, n_layer_curr = args.base, 0
         for i in range(1, self.nBlocks):
             self.steps.append(args.step if args.stepmode == 'even'
@@ -223,10 +217,6 @@ class MSDNet(nn.Module):
 
         print("building network of steps: ")
         print(self.steps, n_layers_all)
-
-        # print('##### Remember to change #####')
-        n_layers_all = 22 
-        # print('##### Remember to change #####')
 
         nIn = args.nChannels
         for i in range(self.nBlocks):
@@ -290,10 +280,8 @@ class MSDNet(nn.Module):
                 interval = math.ceil(1.0 * n_layer_all / args.nScales)
                 inScales = args.nScales - math.floor(1.0 * (max(0, n_layer_curr - 2)) / interval)
                 outScales = args.nScales - math.floor(1.0 * (n_layer_curr - 1) / interval)
-                # print(i, interval, inScales, outScales, n_layer_curr, n_layer_all)
             else:
                 raise ValueError
-            # print('|\t\tinScales {} outScales {}\t\t\t|'.format(inScales, outScales))
 
             layers.append(MSDNLayer(nIn, args.growthRate, args, inScales, outScales))
             print('|\t\tinScales {} outScales {} inChannels {} outChannels {}\t\t|'.format(inScales, outScales, nIn, args.growthRate))
@@ -318,7 +306,6 @@ class MSDNet(nn.Module):
                 nIn = math.floor(1.0 * args.reduction * nIn)
                 print('|\t\tTransition layer inserted! (min)\t|')
             print("")
-            # print('|\t\tinScales {} outScales {} inChannels {} outChannels {}\t\t\t|'.format(inScales, outScales, in_channel, nIn))
 
         return nn.Sequential(*layers), nIn
 
@@ -350,12 +337,7 @@ class MSDNet(nn.Module):
     def forward(self, x):
         res = []
         for i in range(self.nBlocks):
-            # print('!!!!! The {}-th block !!!!!'.format(i))
             x = self.blocks[i](x)
             res.append(self.classifier[i](x))
-        # return a tuple
         return res
 
-# def createModel(args):
-#     print('Create MSDNet{}-{:d} for {}'.format(args.nBlocks, args.step, args.data))
-#     return MSDNet(args.nBlocks, args.nChannels, args)

@@ -35,3 +35,5 @@ python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SA
                 --stepmode lin_grow --step 1 --base 1 --nChannels 16 --use-valid \
                 -j 16
 ```
+
+## Acknowledgments
