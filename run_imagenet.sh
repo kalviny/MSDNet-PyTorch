@@ -1,0 +1,17 @@
+/home/zhanghong/anaconda3/bin/python3 main.py --data-root /ssd3/zhangh/dataset/ImageNet/ \
+--save /ssd3/zhangh/results/Anytime-ImageNet-step=7-block=5-growthRate=16-version-2 \
+--data ImageNet \
+--gpu 0,1,2,3 \
+--arch msdnet \
+--batch-size 256 \
+--epochs 90 \
+--nBlocks 5 \
+--stepmode even \
+--growthRate 16 \
+--grFactor 1-2-4-4 \
+--bnFactor 1-2-4-4 \
+--step 7 \
+--base 7 \
+--nChannels 32 \
+--use-valid \
+-j 16

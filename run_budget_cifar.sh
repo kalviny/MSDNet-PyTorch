@@ -1,0 +1,14 @@
+python3 main.py --data-root /ssd3/zhangh/dataset/cifar10/ \
+--save /ssd3/zhangh/results/cifar10-budget-blk8/ \
+--data cifar10 \
+--gpu 4 \
+--arch msdnet \
+--batch-size 64 \
+--epochs 300 \
+--nBlocks 8 \
+--stepmode lin_grow \
+--step 1 \
+--base 1 \
+--nChannels 16 \
+--use-valid \
+-j 16
