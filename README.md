@@ -38,4 +38,4 @@ python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SA
 
 ## Acknowledgments
 
-We would like to take immense thanks to Danlu Chen, for providing us the prime version of codes and carrying us throughout this project.
+We would like to take immense thanks to Danlu Chen, for providing us the prime version of codes.
