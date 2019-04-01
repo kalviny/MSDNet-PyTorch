@@ -54,8 +54,7 @@ class ConvBN(nn.Module):
         self.net = nn.Sequential(*layer)
 
     def forward(self, x):
-        # print(self.net, x.size())
-        # pdb.set_trace()
+
         return self.net(x)
 
 
@@ -239,8 +238,7 @@ class MSDNet(nn.Module):
                     self._build_classifier_imagenet(nIn * args.grFactor[-1], 1000))
             else:
                 raise NotImplementedError
-                
-        # adding initialization functions
+
         for m in self.blocks:
             if hasattr(m, '__iter__'):
                 for _m in m:

@@ -18,7 +18,7 @@ Citation:
 
 ## Network Configurations
 
-#### Train an MSDNet (block=7) for *anytime prediction*: 
+#### Train an MSDNet (block=7) on CIFAR-100 for *anytime prediction*: 
 
 ```
 python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SAVE \
@@ -27,7 +27,7 @@ python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SA
                 -j 16
 ```
 
-#### Train an MSDNet (block=5) for *efficient batch computation*:
+#### Train an MSDNet (block=5) on CIFAR-100 for *efficient batch computation*:
 
 ```
 python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SAVE \
@@ -36,4 +36,17 @@ python3 main.py --data-root /PATH/TO/CIFAR100 --data cifar100 --save /PATH/TO/SA
                 -j 16
 ```
 
+#### Train an MSDNet (block=5, step=4) on ImageNet:
+
+```
+
+python3 main.py --data-root /PATH/TO/ImageNet --data ImageNet --save /PATH/TO/SAVE \
+                --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5 \
+                --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16 \
+                --grFactor 1-2-4-4 --bnFactor 1-2-4-4 \
+                --use-valid --gpu 0,1,2,3 -j 16 \
+```
+
 ## Acknowledgments
+
+We would like to take immense thanks to Danlu Chen, for providing us the prime version of codes.
