@@ -45,7 +45,7 @@ torch.manual_seed(args.seed)
 def main():
 
     global args
-    best_prec1, best_epoch = 100., 0
+    best_prec1, best_epoch = 0.0, 0
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
