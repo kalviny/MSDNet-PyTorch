@@ -16,7 +16,8 @@ from adaptive_inference import dynamic_evaluate
 import models
 
 args = arg_parser.parse_args()
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+if args.gpu:
+  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 args.grFactor = list(map(int, args.grFactor.split('-')))
 args.bnFactor = list(map(int, args.bnFactor.split('-')))
