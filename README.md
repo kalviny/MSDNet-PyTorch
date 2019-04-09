@@ -47,6 +47,19 @@ python3 main.py --data-root /PATH/TO/ImageNet --data ImageNet --save /PATH/TO/SA
                 --use-valid --gpu 0,1,2,3 -j 16 \
 ```
 
+## Pre-trained MSDNet Models on ImageNet
+1. [Download](https://www.dropbox.com/sh/7p758wfcq4wm6lf/AACU4hFtV1_4UQavexrsSs1Ba?dl=0) pretrained models and validation indeces on ImageNet.
+2. Test script:
+```
+python3 main.py --data-root /PATH/TO/ImageNet --data ImageNet --save /PATH/TO/SAVE \
+                --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5 \
+                --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16 \
+                --grFactor 1-2-4-4 --bnFactor 1-2-4-4 \
+                --evalmode dynamic --evaluate-from /PATH/TO/CHECKPOINT/ \
+                --use-valid --gpu 0,1,2,3 -j 16 \
+```
+   
+
 ## Acknowledgments
 
 We would like to take immense thanks to Danlu Chen, for providing us the prime version of codes.
