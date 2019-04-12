@@ -22,10 +22,9 @@ def dynamic_evaluate(model, test_loader, val_loader, args):
     flops = torch.load(os.path.join(args.save, 'flops.pth'))
 
     with open(os.path.join(args.save, 'dynamic.txt'), 'w') as fout:
-        for p in range(1, 30):
+        for p in range(1, 40):
             print("*********************")
-            _p = torch.FloatTensor(1).fill_(p * 1.0 / 15)
-            # probs = [math.exp(math.log(p) * i) for i in in range(1, tester.args.nBlocks + 1)] # geometric distribution
+            _p = torch.FloatTensor(1).fill_(p * 1.0 / 20)
             probs = torch.exp(torch.log(_p) * torch.range(1, args.nBlocks))
             probs /= probs.sum()
             acc_val, _, T = tester.dynamic_eval_find_threshold(
@@ -56,14 +55,11 @@ class Tester(object):
                     output = [output]
                 for b in range(n_stage):
                     _t = self.softmax(output[b])
-                    # TODO check whether using the cpu type
-                    # logits[b].append(_t.cpu()) 
+
                     logits[b].append(_t) 
 
             if i % self.args.print_freq == 0: 
                 print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
-
-        # print(type(targets))
 
         for b in range(n_stage):
             logits[b] = torch.cat(logits[b], dim=0)
@@ -125,7 +121,6 @@ class Tester(object):
             expected_flops += _t * flops[k]
             acc_all += acc_rec[k]
 
-        # print('acc_all', acc_all * 1.0 / n_sample)
         return acc * 100.0 / n_sample, expected_flops, T
 
     def dynamic_eval_with_threshold(self, logits, targets, flops, T):
@@ -134,7 +129,6 @@ class Tester(object):
 
         acc_rec, exp = torch.zeros(n_stage), torch.zeros(n_stage)
         acc, expected_flops = 0, 0
-        fout = open('index.txt', 'w')
         for i in range(n_sample):
             gold_label = targets[i]
             for k in range(n_stage):
@@ -142,14 +136,8 @@ class Tester(object):
                     _g = int(gold_label.item())
                     _pred = int(argmax_preds[k][i].item())
                     if _g == _pred:
-                        # print(max_preds[k][i].item(), logits[k][i][_g].item())
                         acc += 1
                         acc_rec[k] += 1
-                    """
-                    else:
-                        fout.write('{}\t{}\t{}\t{}\t{:.3f}\n'.format(k, i, _pred, _g, max_preds[k][i].item()))
-                        # print(max(logits[k][i]).item(), max_preds[k][i].item(), logits[k][i][_g].item())
-                    """
                     exp[k] += 1
                     break
         acc_all, sample_all = 0, 0
@@ -158,15 +146,5 @@ class Tester(object):
             sample_all += exp[k]
             expected_flops += _t * flops[k]
             acc_all += acc_rec[k]
-
-        """
-        for k in range(n_stage):
-            _t = exp[k] * 1.0 / n_sample
-            _acc = 1.0 * acc_rec[k] / exp[k]
-            print('stage[{}], exp: {:.3f}, acc: {:.3f}'.format(k, _t.item(), _acc.item()))
-        """
-
-        # print('Test acc_all: {:.3f}, Case all: {}'.format(acc_all * 1.0 / n_sample, sample_all))
-        # print("Test acc_all", acc_all * 1.0 / n_sample)
 
         return acc * 100.0 / n_sample, expected_flops
