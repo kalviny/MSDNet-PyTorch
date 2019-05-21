@@ -14,10 +14,12 @@ from dataloader import get_dataloaders
 from args import arg_parser
 from adaptive_inference import dynamic_evaluate
 import models
+from op_counter import measure_model
 
 args = arg_parser.parse_args()
+
 if args.gpu:
-  os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 args.grFactor = list(map(int, args.grFactor.split('-')))
 args.bnFactor = list(map(int, args.bnFactor.split('-')))
@@ -51,11 +53,18 @@ def main():
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-    torch.save(args, os.path.join(args.save, 'args.pth'))
+    if args.data.startswith('cifar'):
+        IM_SIZE = 32
+    else:
+        IM_SIZE = 224
 
     model = getattr(models, args.arch)(args)
-
-    print(model)
+    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)    
+    torch.save(n_flops, os.path.join(args.save, 'flops.pth'))
+    del(model)
+        
+        
+    model = getattr(models, args.arch)(args)
 
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
         model.features = torch.nn.DataParallel(model.features)
@@ -86,7 +95,7 @@ def main():
         model.load_state_dict(state_dict)
 
         if args.evalmode == 'anytime':
-            validate(val_loader, model, criterion)
+            validate(test_loader, model, criterion)
         else:
             dynamic_evaluate(model, test_loader, val_loader, args)
         return
@@ -137,7 +146,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     running_lr = None
     for i, (input, target) in enumerate(train_loader):
-
         lr = adjust_learning_rate(optimizer, epoch, args, batch=i,
                                   nBatch=len(train_loader), method=args.lr_type)
 
@@ -272,7 +280,7 @@ def load_checkpoint(args):
     latest_filename = os.path.join(model_dir, 'latest.txt')
     if os.path.exists(latest_filename):
         with open(latest_filename, 'r') as fin:
-            model_filename = fin.readlines()[0]
+            model_filename = fin.readlines()[0].strip()
     else:
         return None
     print("=> loading checkpoint '{}'".format(model_filename))
