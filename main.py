@@ -130,6 +130,13 @@ def main():
 
     print('Best val_prec1: {:.4f} at epoch {}'.format(best_prec1, best_epoch))
 
+    ### Test the final model
+
+    print('********** Final prediction results **********')
+    validate(test_loader, model, criterion)
+
+    return 
+
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
