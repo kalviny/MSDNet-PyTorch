@@ -31,7 +31,7 @@ def dynamic_evaluate(model, test_loader, val_loader, args):
                 val_pred, val_target, probs, flops)
             acc_test, exp_flops = tester.dynamic_eval_with_threshold(
                 test_pred, test_target, flops, T)
-            print('valid acc: {:.3f}, test acc: {:.3f}, test flops: {:.2f}M'.format(acc_val, acc_test, exp_flops / 1e6))
+            print('valid acc: {:.3f}, test acc: {:.3f}, test flops: {:.2f}M'.format(acc_val, acc_test, exp_flops))
             fout.write('{}\t{}\n'.format(acc_test, exp_flops.item()))
 
 
