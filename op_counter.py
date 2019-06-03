@@ -96,9 +96,8 @@ def measure_layer(layer, x):
     if type_name == 'Linear':
         print('---------------------')
         print('FLOPs: %.2fM, Params: %.2fM' % (count_ops / 1e6, count_params / 1e6))
-
-        cls_ops.append(count_ops / 1e6)
-        cls_params.append(count_params / 1e6)
+        cls_ops.append(count_ops)
+        cls_params.append(count_params)
         
     return
 
