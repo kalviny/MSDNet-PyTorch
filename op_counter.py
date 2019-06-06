@@ -60,7 +60,7 @@ def measure_layer(layer, x):
         delta_params = get_layer_param(layer)
 
     ### ops_pooling
-    elif type_name in ['AvgPool2d']:
+    elif type_name in ['AvgPool2d', 'MaxPool2d']:
         in_w = x.size()[2]
         kernel_ops = layer.kernel_size * layer.kernel_size
         out_w = int((in_w + 2 * layer.padding - layer.kernel_size) / layer.stride + 1)
