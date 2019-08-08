@@ -62,4 +62,4 @@ python3 main.py --data-root /PATH/TO/ImageNet --data ImageNet --save /PATH/TO/SA
 
 ## Acknowledgments
 
-We would like to take immense thanks to Danlu Chen, for providing us the prime version of codes.
+We would like to take immense thanks to [Danlu Chen](https://taineleau.me/), for providing us the prime version of codes.
