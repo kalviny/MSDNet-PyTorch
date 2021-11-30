@@ -161,7 +161,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         data_time.update(time.time() - end)
 
-        target = target.cuda(async=True)
+        target = target.cuda(device=None)
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
 
@@ -216,7 +216,7 @@ def validate(val_loader, model, criterion):
     end = time.time()
     with torch.no_grad():
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(async=True)
+            target = target.cuda(device=None)
             input = input.cuda()
 
             input_var = torch.autograd.Variable(input)
@@ -324,7 +324,7 @@ def accuracy(output, target, topk=(1,)):
 
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
+        correct_k = correct[:k].reshape(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
