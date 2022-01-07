@@ -1,5 +1,5 @@
 # shell script
-*.sh
+#*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -105,5 +105,9 @@ ENV/
 
 # result files
 results/*
+
+# cifar
+cifar-100-python/*
+cifar-100-python.*
 
 .DS_Store
